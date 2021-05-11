@@ -1,0 +1,36 @@
+https://www.youtube.com/watch?v=WxGBoY5iNXY  -- for api
+
+1)Se foloseste FLASK pentru API si SqlAlchemy pentru ORM <3
+[o sa folosim un public id si un id separat, ptc daca cineva decodeaza JWT-ul va putea vedea id-ul userului, 
+si va putea face rost de id precedent sau viitor pt a obtine date]
+-- ca sa creezi db-ul, deschizi un terminal si scrii import db from api, dupa db.create_all()
+
+--Vom folosit libraria WERKZEUG pentru hash la password
+--Vom folosi PIJWT pentru token
+
+Ca sa primesc token-ul voi folosi BASIC AUTH si GET pe /login
+
+Folosesc din librarie functools functia WRAPS care este un decorator peste toate celelalte functii care va
+verifica daca userul este autentificat / are token
+
+--------------- test, test -------------------- pentru user admin
+
+=> Mergem la pagina de login in react
+o sa folosim material ui pentru a crea pagina
+
+https://www.youtube.com/watch?v=Xoz31I1FuiY 
+
+--> AM folosit SMTP client din flask ca sa trimit mailuri
+--> Am folosit libraria secrets ca sa generez un token
+
+-----------------------------------------------------
+--Logo 
+--Imaginea aia photoshop
+
+
+TODOO---
+-- SA FIE TOATE COMPONENTENEL PE ACEASI PAGINA, PTC STANGA ramane poza
+
+--SA VERIFICI LA REGISTER CA USERUL NU EXISTA DEJA (email sau username)!!@@
+--SA OPRESTI AUTENTIFICAREA (LOGIN) DACA CONTUL NU E VERIFICAT!!
+--SA STERGI TOATE TOKEN-URILE PT RESET PASSWORD DUPA CE EXPIRA / DACA UN USER ARE MAI MULTE SI FOLOSESTE 1
