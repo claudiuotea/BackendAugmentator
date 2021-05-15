@@ -10,8 +10,9 @@ si va putea face rost de id precedent sau viitor pt a obtine date]
 
 Ca sa primesc token-ul voi folosi BASIC AUTH si GET pe /login
 
-Folosesc din librarie functools functia WRAPS care este un decorator peste toate celelalte functii care va
-verifica daca userul este autentificat / are token
+https://medium.com/@ryanchenkie_40935/react-authentication-how-to-store-jwt-in-a-cookie-346519310e81
+store jwt in a cookie
+https://dev.to/totally_chase/python-using-jwt-in-cookies-with-a-flask-app-and-restful-api-2p75
 
 --------------- test, test -------------------- pentru user admin
 

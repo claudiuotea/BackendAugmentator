@@ -1,22 +1,25 @@
 import uuid
+import flask_jwt_extended
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS, cross_origin
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token,current_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
 import datetime
-from functools import wraps
 from flask_mail import Mail, Message
-
 import utils
 
 app = Flask(__name__)
-cors = CORS(app)
-app.config['CORS_HEADERS'] = 'Content-Type'
+# cors = CORS(app)
+CORS(app)
 
 # O sa utilizam secret key-ul pentru JWT
-app.config['SECRET_KEY'] = 'JDMpower'
+app.config["JWT_SECRET_KEY"] = 'JDMpower'
+# jwt
+jwt = JWTManager(app)
+
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 # configurari pentru email
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -25,6 +28,12 @@ app.config['MAIL_USERNAME'] = 'claudiuoteaogc1@gmail.com'
 app.config['MAIL_PASSWORD'] = 'veverita1999'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
+#Pentru cookies ca sa trimit JWT sa nu stea in local storage
+#app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+#app.config['JWT_COOKIE_CSRF_PROTECT'] = True
+#app.config['JWT_CSRF_CHECK_FORM'] = True
 
 # aici salvam database-ul
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
@@ -44,6 +53,27 @@ class User(db.Model):
     admin = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
 
+# We are using the `refresh=True` options in jwt_required to only allow
+# refresh tokens to access this route.
+@app.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh():
+    identity = get_jwt_identity()
+    access_token = create_access_token(identity=identity)
+    print(access_token)
+    return jsonify(access_token=access_token)
+
+
+@jwt.user_identity_loader
+def user_identity_lookup(user):
+    return user
+
+
+@jwt.user_lookup_loader
+def user_lookup_callback(jwt_header, jwt_data):
+    identity = jwt_data["sub"]
+    return User.query.filter_by(public_id=identity).one_or_none()
+
 
 class ResetTokens(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -58,37 +88,42 @@ class VerifyTokens(db.Model):
     token = db.Column(db.String(50))
 
 
-# vom folosi acest decorator peste toate call-urile care necesita autorizare
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
 
-        # verificam daca exista token-ul in header
-        if 'x-access-token' in request.headers:
-            token = request.headers['x-access-token']
+@app.route('/login')
+@cross_origin()
+def login():
+    # preluam informatiile pt autorizare
+    auth = request.authorization
 
-        # returnam 401 daca nu
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
+    # daca nu exista sau nu sunt complete, returnam 401
+    if not auth or not auth.username or not auth.password:
+        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
-        # Incercam sa extragem din JWT public id-ul (care este unic) si sa gasim user-ul apartinator
-        try:
-            data = jwt.decode(token, app.config['SECRET_KEY'])
-            current_user = User.query.filter_by(public_id=data['public_id']).first()
-        except:
-            # daca nu se poate, token-ul este invalid
-            return jsonify({'message': 'Token invalid!'}), 401
+    # preluam user-ul din database dupa username
+    user = User.query.filter_by(username=auth.username).first()
 
-        return f(current_user, *args, **kwargs)
+    # daca nu e gasit anuntam ca nu exista
+    if not user:
+        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
-    return decorated
+    # daca exista verificam ca parola e corecta
+    if check_password_hash(user.password, auth.password):
+        # daca contul nu este verificat, oprim login-ul
+        if user.verified == False:
+            return jsonify({'message': 'Please verify account!'}), 403
+
+        access_token = create_access_token(user.public_id)
+        refresh_token = create_refresh_token(user.public_id)
+        return jsonify({'AccessToken': access_token,'RefreshToken':refresh_token})
+
+    # parola nu e corecta, returnam 401
+    return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
 
 @app.route("/user", methods=['GET'])
-@token_required
+@jwt_required()
 @cross_origin()
-def get_all_users(current_user):
+def get_all_users():
     # doar admin poate vedea userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
@@ -102,15 +137,15 @@ def get_all_users(current_user):
         user_data['public_id'] = user.public_id
         user_data['email'] = user.email
         user_data['username'] = user.username
-        user_data['password'] = user.password
-        user_data['admin'] = user.admin
+        user_data['isVerified'] = user.verified
+        user_data['isAdmin'] = user.admin
         output.append(user_data)
 
     return jsonify({'users': output})
 
 
 @app.route('/user/<public_id>', methods=['GET'])
-@token_required
+@jwt_required()
 @cross_origin()
 def get_one_user(current_user, public_id):
     # doar admin poate
@@ -139,8 +174,8 @@ def register_user():
     # salvam datele din request
     data = request.get_json()
 
-    #verificam daca user-ul exista deja in database
-    user = User.query.filter(or_(User.username==data['username'],User.email==data['email'])).all()
+    # verificam daca user-ul exista deja in database
+    user = User.query.filter(or_(User.username == data['username'], User.email == data['email'])).all()
 
     if user:
         return jsonify({'message': 'User already registered!'}), 403
@@ -156,7 +191,7 @@ def register_user():
     # creez si trimit link-ul pt verificare cont
     url, token = utils.Utils.store_verify_token(new_user.public_id)
 
-    insertToken = VerifyTokens(token=token,public_id=new_user.public_id)
+    insertToken = VerifyTokens(token=token, public_id=new_user.public_id)
     db.session.add(insertToken)
 
     # ii trimit mail cu link-ul
@@ -167,6 +202,7 @@ def register_user():
     return jsonify({'message:': 'New user created!'}), 200
 
 
+@cross_origin()
 @app.route('/verifyaccount', methods=["POST"])
 def verifyAccount():
     # preluam datele
@@ -186,11 +222,25 @@ def verifyAccount():
     db.session.commit()
     return jsonify({'message': 'Success!'}), 200
 
+@cross_origin()
+@app.route('/verifybyadmin', methods=["PUT"])
+@jwt_required()
+def verifyByAdmin():
+    # preluam datele
+    data = request.get_json()
+
+    if not current_user.admin:
+        return jsonify({'message': 'Permission denied!'}), 401
+    # setam contul ca si verificat si stergem token-ul
+    user = User.query.filter_by(public_id=data['public_id']).first()
+    user.verified = True
+    db.session.commit()
+    return jsonify({'message': 'Success!'}), 200
 
 @app.route('/user/<public_id>', methods=['PUT'])
-@token_required
+@jwt_required()
 @cross_origin()
-def promote_user(current_user, public_id):
+def promote_user(public_id):
     # doar admin poate vedea userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
@@ -208,10 +258,10 @@ def promote_user(current_user, public_id):
 
 
 @app.route('/user/<public_id>', methods=['DELETE'])
-@token_required
+@jwt_required()
 @cross_origin()
-def delete_user(current_user, public_id):
-    # doar admin poate vedea userii
+def delete_user(public_id):
+    # doar admin poate sterge userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
 
@@ -228,41 +278,8 @@ def delete_user(current_user, public_id):
     return jsonify({'message': 'The user has been deleted!'})
 
 
-@app.route('/login')
-@cross_origin()
-def login():
-    # preluam informatiile pt autorizare
-    auth = request.authorization
-
-    # daca nu exista sau nu sunt complete, returnam 401
-    if not auth or not auth.username or not auth.password:
-        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
-
-    # preluam user-ul din database dupa username
-    user = User.query.filter_by(username=auth.username).first()
-
-    # daca nu e gasit anuntam ca nu exista
-    if not user:
-        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
-
-    # daca exista verificam ca parola e corecta
-    if check_password_hash(user.password, auth.password):
-        #daca contul nu este verificat, oprim login-ul
-        if user.verified == False:
-            return jsonify({'message': 'Please verify account!'}), 403
-
-        # generam token-ul ptc parola e corecta
-        token = jwt.encode(
-            {'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)}
-            , app.config['SECRET_KEY'])
-        # il returnam
-        return jsonify({'token': token.decode('UTF-8')})
-
-    # parola nu e corecta, returnam 401
-    return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
-
-
 @app.route('/forgotpass', methods=["POST"])
+@cross_origin()
 def forgotPass():
     # preluam informatia din request
     data = request.get_json()
@@ -289,6 +306,7 @@ def forgotPass():
 
 
 @app.route('/resetpass', methods=["POST"])
+@cross_origin()
 def resetPass():
     # preluam datele
     data = request.get_json()
@@ -300,9 +318,8 @@ def resetPass():
     if not token or token.public_id != data['public_id']:
         return jsonify({'message': 'Not authorized!'}), 403
 
-    #daca am gasit token atunci verificam daca sunt mai multe ca sa le stergem pe toate
+    # daca am gasit token atunci verificam daca sunt mai multe ca sa le stergem pe toate
     tokens = ResetTokens.query.filter_by(public_id=data['public_id']).all()
-
 
     # daca am gasit token-ul si este al user-ului, verificam daca inca este valid token-ul
     if token.exp_date > datetime.datetime.now():
@@ -310,17 +327,25 @@ def resetPass():
         user = User.query.filter_by(public_id=data['public_id']).first()
         user.password = generate_password_hash(data['password'], method="sha256")
 
-        #sterg toate token-urile user-ului
+        # sterg toate token-urile user-ului
         for t in tokens:
             db.session.delete(t)
         db.session.commit()
         return jsonify({'message': 'Success!'}), 200
     else:
-        #si daca sunt expirate le sterg pe toate
+        # si daca sunt expirate le sterg pe toate
         for t in tokens:
             db.session.delete(t)
         db.session.commit()
         return jsonify({'message': 'Token expired!'}), 403
+
+
+@app.route('/checkadmin', methods=["GET"])
+@jwt_required()
+@cross_origin()
+def checkAdmin():
+    # returnez daca e admin sau nu
+    return jsonify({'admin': current_user.admin})
 
 
 if __name__ == '__main__':
