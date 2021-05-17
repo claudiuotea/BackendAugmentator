@@ -2,6 +2,7 @@ import os
 import random as rand
 import shutil
 import zipfile
+from pathlib import Path
 
 import cv2
 import imutils
@@ -11,7 +12,7 @@ from RandomEraser import RandomErasing
 
 
 class Augmentator:
-    def __init__(self, archiveName,clahe = 0, grayscale = 0, flip = 0, erase = 0, rotate=0, minErase = 0.05, maxErase = 0.4, datasetPath="", flipOption = 1, eraseOption = 1):
+    def __init__(self, saveArchivePath,archiveName,clahe = 0, grayscale = 0, flip = 0, erase = 0, rotate=0, minErase = 0.05, maxErase = 0.4, datasetPath="", flipOption = 1, eraseOption = 1):
         self.clahe = clahe
         self.grayscale = grayscale
         self.flip = flip
@@ -27,6 +28,7 @@ class Augmentator:
         self.eraseOption = eraseOption
         self.randomEraser = RandomErasing(probability=erase)
         self.archiveName = archiveName
+        self.saveArchivePath = saveArchivePath
     #convertesc parametrii din forma de frontend in forma acceptata de functia applyAugmentations
     #static ca sa o pot apela fara creez clasa
     @staticmethod
@@ -448,27 +450,43 @@ class Augmentator:
     def eraseWholePath(self, path, savePath):
         self.randomEraser.eraseWholePath(path,savePath)
 
+
     def zipAugmentations(self):
         currentPath = self.datasetPath+"\\"
 
         #am terminat cu augmentarile, deci vom sterge setul de date CLEAN si vom arhiva tot restul
         # TODO:rezolva trycatch asta
         pathToRemove = self.datasetPath + "\\CLEAN"
+
+
         shutil.rmtree(pathToRemove,ignore_errors=True)
 
-        #o salvez cu acelasi nume cu care a venit din request
-        zip_file = zipfile.ZipFile(currentPath+self.archiveName,'w')
-        #gaseste toate directoarele cu augmentari si adauga-le in arhiva
-        directory_contents = os.listdir(currentPath)
-        for item in directory_contents:
-            #daca e director il adaug in arhiva
-            if os.path.isdir(item):
-                zip_file.write(currentPath+item)
-        zip_file.close()
+        nameOfArchive = self.archiveName.split('.')[0]
+        zipf = zipfile.ZipFile(self.saveArchivePath+"\\"+self.archiveName, 'w', zipfile.ZIP_DEFLATED)
+        self.zipdir(currentPath,zipf)
+        #self.removeArchiveFromItself(currentPath+self.archiveName,currentPath+nameOfArchive+"2.zip")
 
         #acum sterg directoarele pentru ca sunt deja in arhiva
         directory_contents = os.listdir(self.datasetPath)
         for item in directory_contents:
             # daca e director il adaug in arhiva
-            if os.path.isdir(item):
+            if os.path.isdir(currentPath+item):
                 shutil.rmtree(currentPath+item,ignore_errors=True)
+
+    def removeArchiveFromItself(self, path1,path2):
+        zin = zipfile.ZipFile(path1, 'r')
+        zout = zipfile.ZipFile(path2, 'w')
+        for item in zin.infolist():
+            buffer = zin.read(item.filename)
+            if item.filename.split('.')[1] != ".zip":
+                zout.writestr(item, buffer)
+        zout.close()
+        zin.close()
+
+    def zipdir(self,path, ziph):
+        # ziph este zipfile in care adaug
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                ziph.write(os.path.join(root, file),
+                           os.path.relpath(os.path.join(root, file),
+                                           os.path.join(path, '..')))

@@ -78,6 +78,7 @@ def consume_request_body():
     for more details """
     request.data
 
+#@app.route("get")
 
 @app.route("/uploadfile",methods=["POST"])
 @jwt_required()
@@ -87,7 +88,8 @@ def uploadFileFromClient():
         #path-ul user-ului
         savePath = os.getcwd() +"\\" + app.config["USERS_FOLDER"] + "\\" + current_user.public_id
         cleanPath = savePath + "\\" + "CLEAN"
-
+        #path-ul unde salveaza arhiva augmentata
+        saveArchivePath = os.getcwd() + "\\" +app.config["USERS_FOLDER"] + "\\AUGMENTED\\" + current_user.public_id
         #deschide fisierul cu ZipFile ca sa-l dezarhivezi direct din request
         file_like_object = file.stream._file
         zipfile_ob = ZipFile(file_like_object)
@@ -105,7 +107,7 @@ def uploadFileFromClient():
         )
         augmentator = Augmentator(clahe=clahe,grayscale=grayscale,flip=flip,erase=erase
                                   ,rotate=rotate,flipOption=flipOption,eraseOption=eraseOption
-                                  ,datasetPath=savePath, archiveName=file.filename)
+                                  ,datasetPath=savePath, archiveName=file.filename,saveArchivePath=saveArchivePath)
 
         augmentator.applyAugmentations()
         return resp
@@ -252,6 +254,13 @@ def register_user():
 
     userPath = os.getcwd() + "\\" + app.config["USERS_FOLDER"] + "\\" + new_user.public_id
     os.mkdir(userPath)
+    #se creeaza si un folder unde vor fi storate toate datele augmentate, daca nu exista
+    #aici fiecare user va avea din nou un folder propriu unde vor fi storate datele augmentate
+    if not path.exists(app.config["USERS_FOLDER"]+"\\AUGMENTED"):
+        currentPath = os.getcwd()
+        os.mkdir(currentPath + "\\" + app.config["USERS_FOLDER"]+"\\AUGMENTED")
+    augmUserPath = os.getcwd() + "\\" + app.config["USERS_FOLDER"] + "\\AUGMENTED\\" + new_user.public_id
+    os.mkdir(augmUserPath)
 
     # creez si trimit link-ul pt verificare cont
     url, token = utils.Utils.store_verify_token(new_user.public_id)
