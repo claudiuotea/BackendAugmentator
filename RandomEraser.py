@@ -3,13 +3,12 @@ import random
 import math
 import cv2
 import numpy as np
+import random as rand
 
-
-class RandomErasing(object):
+class RandomErasing():
     '''
     Class that performs Random Erasing in Random Erasing Data Augmentation by Zhong et al.
     -------------------------------------------------------------------------------------
-    probability: The probability that the operation will be performed.
     sl: min erasing area
     sh: max erasing area
     r1: min aspect ratio
@@ -17,14 +16,14 @@ class RandomErasing(object):
     -------------------------------------------------------------------------------------
     '''
 
-    def __init__(self, sl=0.05, sh=0.4, r1=0.3):
+    def __init__(self, sl=0.05, sh=0.4, r1=0.3,probability=1):
         self.sl = sl
         self.sh = sh
         self.r1 = r1
+        self.probability = probability
 
     # SURSA: articol random erasing, de la autor
     def erase(self, img):
-
         if len(img.shape) == 3:
             height, width, color = img.shape
         else:
@@ -55,23 +54,20 @@ class RandomErasing(object):
                 return img
 
     def eraseWholePath(self, path, savePath):
-        # just for testing purpose
-        # path = 'E:/Anul 3/Augmentator/Images/CleanDataset'
-        # the path were I save the processed images
-        # savePath = "E:/Anul 3/Augmentator/Images/Processed/RandomErasing"
-        # iterate through the files contained in that folder
-
         # TESTING PURPOSE
-        count = 0
+        howManyErased = 0
+
         for filename in os.listdir(path):
-            # read the image
-            img = cv2.imread(os.path.join(path, filename))
-            # if it is an image file
-            if img is not None:
-                # make a copy for edit purpose
-                imageCopy = np.copy(img)
-                imageCopy = self.erase(imageCopy)
-                cv2.imwrite(os.path.join(savePath, filename), imageCopy)
-                # TESTING PURPOSE
-                count += 1
-                print(str(count) + " out of " + str(len(os.listdir(path))))
+            #procentajul din dataset la care aplicam erase
+            if rand.random() < self.probability:
+                #citeste imaginea
+                img = cv2.imread(os.path.join(path, filename))
+                #daca exista imaginea
+                if img is not None:
+                    #fac o copie a ei pe care o editez
+                    imageCopy = np.copy(img)
+                    imageCopy = self.erase(imageCopy)
+                    cv2.imwrite(os.path.join(savePath, filename), imageCopy)
+                    # TESTING PURPOSE
+                    howManyErased += 1
+        print(str(howManyErased) + " out of " + str(len(os.listdir(path))) + " erased.")

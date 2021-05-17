@@ -1,14 +1,22 @@
 import uuid
+from zipfile import ZipFile
+
 import flask_jwt_extended
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token,current_user
 from flask_sqlalchemy import SQLAlchemy
+from pyunpack import Archive
 from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 from flask_mail import Mail, Message
 import utils
+from os import path
+import os
+from shutil import unpack_archive
+
+from Augmentator import Augmentator
 
 app = Flask(__name__)
 # cors = CORS(app)
@@ -30,11 +38,8 @@ app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
-#Pentru cookies ca sa trimit JWT sa nu stea in local storage
-#app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-#app.config['JWT_COOKIE_CSRF_PROTECT'] = True
-#app.config['JWT_CSRF_CHECK_FORM'] = True
-
+#path-ul unde userii salveaza datele
+app.config["USERS_FOLDER"] = "users"
 # aici salvam database-ul
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
 
@@ -52,6 +57,60 @@ class User(db.Model):
     password = db.Column(db.String(50))
     admin = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
+
+
+class ResetTokens(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(50))
+    token = db.Column(db.String(50))
+    exp_date = db.Column(db.DateTime)
+
+
+class VerifyTokens(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(50))
+    token = db.Column(db.String(50))
+
+@app.before_request
+def consume_request_body():
+    """ Consumes the request body before handling a request to fix uwsgi+nginx problems
+    See https://github.com/vimalloc/flask-jwt-extended/issues/253#issuecomment-505222118
+    for more details """
+    request.data
+
+
+@app.route("/uploadfile",methods=["POST"])
+@jwt_required()
+def uploadFileFromClient():
+        file = request.files.get("myFile")
+
+        #path-ul user-ului
+        savePath = os.getcwd() +"\\" + app.config["USERS_FOLDER"] + "\\" + current_user.public_id
+        cleanPath = savePath + "\\" + "CLEAN"
+
+        #deschide fisierul cu ZipFile ca sa-l dezarhivezi direct din request
+        file_like_object = file.stream._file
+        zipfile_ob = ZipFile(file_like_object)
+        zipfile_ob.extractall(cleanPath)
+
+        resp = make_response('Success!', 200)
+        #creez parametrii pentru augmentare
+        augmData = request.form
+
+        clahe,grayscale,flip,erase,rotate,flipOption,eraseOption = Augmentator.convertParams(
+            augmData["isClahe"],augmData["isGray"],augmData["isFlip"],augmData["isErase"],
+            augmData["isFlipBase"],augmData["isFlipClahe"],augmData["isFlipGray"],
+            augmData["isEraseBase"],augmData["isEraseClahe"],augmData["isEraseGray"],
+            augmData["flipProbability"],augmData["eraseProbability"],augmData["rotateProbability"]
+        )
+        augmentator = Augmentator(clahe=clahe,grayscale=grayscale,flip=flip,erase=erase
+                                  ,rotate=rotate,flipOption=flipOption,eraseOption=eraseOption
+                                  ,datasetPath=savePath, archiveName=file.filename)
+
+        augmentator.applyAugmentations()
+        return resp
+
+
 
 # We are using the `refresh=True` options in jwt_required to only allow
 # refresh tokens to access this route.
@@ -75,20 +134,17 @@ def user_lookup_callback(jwt_header, jwt_data):
     return User.query.filter_by(public_id=identity).one_or_none()
 
 
-class ResetTokens(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(50))
-    token = db.Column(db.String(50))
-    exp_date = db.Column(db.DateTime)
 
+@app.route("/contact", methods=["POST"])
+def sendEmail():
+    data = request.get_json()["mail"]
 
-class VerifyTokens(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(50))
-    token = db.Column(db.String(50))
-
-
-
+    # ii trimit mail cu link-ul
+    print(data["subject"])
+    msg = Message(data['subject'], sender=data['mail'], recipients=[app.config['MAIL_USERNAME']])
+    msg.body = "Send from: "+data['mail']+"\n" + data['message'] + "\nPhone number: " + data['phoneNumber']
+    mail.send(msg)
+    return make_response('Success!', 200)
 @app.route('/login')
 @cross_origin()
 def login():
@@ -187,6 +243,15 @@ def register_user():
                     , password=hashed_password, admin=False, verified=False)
     # il adaugam in database
     db.session.add(new_user)
+
+    # pentru fiecare user creez un folder pe server, unde-si storeaza datele
+    # verific prima data daca exista deja un folder de baza pentru toti userii, altfel il creez
+    if not path.exists(app.config["USERS_FOLDER"]):
+        currentPath = os.getcwd()
+        os.mkdir(currentPath + "\\" + app.config["USERS_FOLDER"])
+
+    userPath = os.getcwd() + "\\" + app.config["USERS_FOLDER"] + "\\" + new_user.public_id
+    os.mkdir(userPath)
 
     # creez si trimit link-ul pt verificare cont
     url, token = utils.Utils.store_verify_token(new_user.public_id)

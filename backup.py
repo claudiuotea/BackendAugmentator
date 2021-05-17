@@ -1,18 +1,20 @@
 import uuid
+from zipfile import ZipFile
 
 import flask_jwt_extended
 from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS, cross_origin
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token,current_user
+from flask_jwt_extended.default_callbacks import default_expired_token_callback, default_invalid_token_callback, \
+    default_unauthorized_callback, default_revoked_token_callback
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
 import datetime
-from functools import wraps
 from flask_mail import Mail, Message
-
 import utils
+from os import path
+import os
 
 app = Flask(__name__)
 # cors = CORS(app)
@@ -34,11 +36,9 @@ app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
-#Pentru cookies ca sa trimit JWT sa nu stea in local storage
-#app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-#app.config['JWT_COOKIE_CSRF_PROTECT'] = True
-#app.config['JWT_CSRF_CHECK_FORM'] = True
-
+app.config["USERS_FOLDER"] = "users"
+#500mb maximum
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 # aici salvam database-ul
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
 
@@ -46,6 +46,12 @@ db = SQLAlchemy(app)
 # instanta pentru clasa care trimite mailuri
 mail = Mail(app)
 
+@app.before_request
+def consume_request_body():
+    """ Consumes the request body before handling a request to fix uwsgi+nginx problems
+    See https://github.com/vimalloc/flask-jwt-extended/issues/253#issuecomment-505222118
+    for more details """
+    request.data
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -57,6 +63,36 @@ class User(db.Model):
     admin = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
 
+class ResetTokens(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(50))
+    token = db.Column(db.String(50))
+    exp_date = db.Column(db.DateTime)
+
+
+class VerifyTokens(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(50))
+    token = db.Column(db.String(50))
+
+
+@app.route("/uploadfile",methods=["POST"])
+#@jwt_required()
+def uploadFileFromClient():
+    file = request.files.get("myFile")
+    #path-ul user-ului
+    # savePath = os.getcwd() +"\\" + app.config["USERS_FOLDER"] + "\\" + current_user.public_id
+    savePath = os.getcwd() +"\\" + app.config["USERS_FOLDER"] + "\\" + current_user.public_id
+    # file_like_object = file.stream._file
+    # zipfile_ob = ZipFile(file_like_object)
+    # zipfile_ob.extractall(savePath)
+
+
+    #data.save(os.path.join(savePath,data.filename))
+    resp = make_response('Success!', 200)
+    # Enable Access-Control-Allow-Origin
+    #resp.headers.add("Access-Control-Allow-Origin", "*")
+    return resp
 # We are using the `refresh=True` options in jwt_required to only allow
 # refresh tokens to access this route.
 @app.route("/refresh", methods=["POST"])
@@ -79,20 +115,18 @@ def user_lookup_callback(jwt_header, jwt_data):
     return User.query.filter_by(public_id=identity).one_or_none()
 
 
-class ResetTokens(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(50))
-    token = db.Column(db.String(50))
-    exp_date = db.Column(db.DateTime)
 
 
-class VerifyTokens(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(50))
-    token = db.Column(db.String(50))
+@app.route("/contact", methods=["POST"])
+def sendEmail():
+    data = request.get_json()["mail"]
 
-
-
+    # ii trimit mail cu link-ul
+    print(data["subject"])
+    msg = Message(data['subject'], sender=data['mail'], recipients=[app.config['MAIL_USERNAME']])
+    msg.body = "Send from: "+data['mail']+"\n" + data['message'] + "\nPhone number: " + data['phoneNumber']
+    mail.send(msg)
+    return make_response('Success!', 200)
 @app.route('/login')
 @cross_origin()
 def login():
@@ -127,7 +161,7 @@ def login():
 @app.route("/user", methods=['GET'])
 @jwt_required()
 @cross_origin()
-def get_all_users(current_user):
+def get_all_users():
     # doar admin poate vedea userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
@@ -141,7 +175,6 @@ def get_all_users(current_user):
         user_data['public_id'] = user.public_id
         user_data['email'] = user.email
         user_data['username'] = user.username
-        user_data['admin'] = user.admin
         user_data['isVerified'] = user.verified
         user_data['isAdmin'] = user.admin
         output.append(user_data)
@@ -193,6 +226,15 @@ def register_user():
     # il adaugam in database
     db.session.add(new_user)
 
+    # pentru fiecare user creez un folder pe server, unde-si storeaza datele
+    # verific prima data daca exista deja un folder de baza pentru toti userii, altfel il creez
+    if not path.exists(app.config["USERS_FOLDER"]):
+        currentPath = os.getcwd()
+        os.mkdir(currentPath + "\\" +app.config["USERS_FOLDER"])
+
+    userPath = os.getcwd() +"\\" + app.config["USERS_FOLDER"] + "\\" + new_user.public_id
+    os.mkdir(userPath)
+
     # creez si trimit link-ul pt verificare cont
     url, token = utils.Utils.store_verify_token(new_user.public_id)
 
@@ -227,11 +269,25 @@ def verifyAccount():
     db.session.commit()
     return jsonify({'message': 'Success!'}), 200
 
+@cross_origin()
+@app.route('/verifybyadmin', methods=["PUT"])
+@jwt_required()
+def verifyByAdmin():
+    # preluam datele
+    data = request.get_json()
+
+    if not current_user.admin:
+        return jsonify({'message': 'Permission denied!'}), 401
+    # setam contul ca si verificat si stergem token-ul
+    user = User.query.filter_by(public_id=data['public_id']).first()
+    user.verified = True
+    db.session.commit()
+    return jsonify({'message': 'Success!'}), 200
 
 @app.route('/user/<public_id>', methods=['PUT'])
 @jwt_required()
 @cross_origin()
-def promote_user(current_user, public_id):
+def promote_user(public_id):
     # doar admin poate vedea userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
@@ -251,8 +307,8 @@ def promote_user(current_user, public_id):
 @app.route('/user/<public_id>', methods=['DELETE'])
 @jwt_required()
 @cross_origin()
-def delete_user(current_user, public_id):
-    # doar admin poate vedea userii
+def delete_user(public_id):
+    # doar admin poate sterge userii
     if not current_user.admin:
         return jsonify({'message': 'Permission denied!'}), 401
 
@@ -336,7 +392,7 @@ def resetPass():
 @cross_origin()
 def checkAdmin():
     # returnez daca e admin sau nu
-    return jsonify({'admin': flask_jwt_extended.current_user.admin})
+    return jsonify({'admin': current_user.admin})
 
 
 if __name__ == '__main__':

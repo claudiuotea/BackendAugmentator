@@ -1,6 +1,6 @@
 import datetime
 import secrets
-
+from zipfile import ZipFile
 
 class Utils:
     # forma de baza url-ului
@@ -33,3 +33,8 @@ class Utils:
         # construiesc link-ul pe care il pasez
         url = Utils.BASE_URL +"/account/verifyaccount?" + "id=" + public_id + "&token=" + token
         return url, token
+
+    @staticmethod
+    def unzip_file(path_to_zip,path_to_unzip):
+        with ZipFile(path_to_zip, 'r') as zip_ref:
+            zip_ref.extractall(zip_ref)
