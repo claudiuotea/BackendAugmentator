@@ -34,6 +34,14 @@ class Utils:
         url = Utils.BASE_URL +"/account/verifyaccount?" + "id=" + public_id + "&token=" + token
         return url, token
 
+        # Salveaza automat in database un token pentru verificarea contului, si userul al cui e token ul
+
+    @staticmethod
+    def store_download_link(public_id,filename):
+        # creaza link si returneaza
+        url = Utils.BASE_URL + "/app/download?publicId="+public_id+"&fileName=" +filename
+        return url
+
     @staticmethod
     def unzip_file(path_to_zip,path_to_unzip):
         with ZipFile(path_to_zip, 'r') as zip_ref:

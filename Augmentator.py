@@ -62,32 +62,32 @@ class Augmentator:
             erase = int(eraseProbability)
         # Coduri optiuni: 1 - pe dataset baza | 2 - pe dataset clahe | 3 - pe dataset grayscale
         # 4- pe dataset baza+clahe | 5- pe baza + grayscale | 6 - pe clahe + grayscale | 7 - pe toate 3
-        if isFlipBase and not isFlipClahe and not isFlipGray:
+        if isFlipBase =="true" and  isFlipClahe  =="false" and isFlipGray =="false" :
             flipOption = 1
-        elif isFlipClahe and not isFlipBase and not isFlipGray:
+        elif isFlipClahe =="true" and isFlipBase =="false" and isFlipGray=="false" :
             flipOption = 2
-        elif isFlipGray and not isFlipBase and not isFlipClahe:
+        elif isFlipGray =="true" and isFlipBase =="false"  and isFlipClahe=="false" :
             flipOption = 3
-        elif isFlipBase and isFlipClahe and not isFlipGray:
+        elif isFlipBase =="true" and isFlipClahe =="true" and isFlipGray =="false" :
             flipOption = 4
-        elif isFlipBase and isFlipGray and not isFlipClahe:
+        elif isFlipBase =="true" and isFlipGray =="true" and isFlipClahe=="false" :
             flipOption = 5
-        elif isFlipClahe and isFlipGray and not isFlipBase:
+        elif isFlipClahe =="true" and isFlipGray  =="true" and isFlipBase=="false" :
             flipOption = 6
         else:
             flipOption = 7
 
-        if isEraseBase and not isEraseClahe and not isEraseGray:
+        if isEraseBase =="true" and isEraseClahe =="false" and isEraseGray=="false":
             eraseOption = 1
-        elif isEraseClahe and not isEraseBase and not isEraseGray:
+        elif isEraseClahe =="true" and isEraseBase =="false" and isEraseGray=="false":
             eraseOption = 2
-        elif isEraseGray and not isEraseBase and not isEraseClahe:
+        elif isEraseGray =="true" and isEraseBase =="false" and isEraseClahe =="false":
             eraseOption = 3
-        elif isEraseBase and isEraseClahe and not isEraseGray:
+        elif isEraseBase =="true" and isEraseClahe =="true" and isEraseGray =="false":
             eraseOption = 4
-        elif isEraseBase and isEraseGray and not isEraseClahe:
+        elif isEraseBase =="true" and isEraseGray =="true" and isEraseClahe =="false":
             eraseOption = 5
-        elif isEraseClahe and isEraseGray and not isEraseBase:
+        elif isEraseClahe =="true" and isEraseGray =="true" and isEraseBase =="false":
             eraseOption = 6
         else:
             eraseOption = 7
@@ -171,7 +171,6 @@ class Augmentator:
         #daca vrea grayscale
         if self.grayscale > 0:
             grayGenerated = True
-            #TODO: CREAZA FOLDER
             self.grayscaleWholePath(self.datasetPath+cleanPath, self.datasetPath+grayPath)
 
         #TODO: REFACTOR THE WHOLE FUNCTION @@@@@@@@@@@@@@
@@ -180,16 +179,14 @@ class Augmentator:
         #4- pe dataset baza+clahe | 5- pe baza + grayscale | 6 - pe clahe + grayscale | 7 - pe toate 3
         if self.flip > 0:
             if self.flipOption == 1:
-                #TODO:creaza folder
+                
                 self.flipAndRotateDataset(self.datasetPath+cleanPath,self.datasetPath+flipPath+basePath)
             if self.flipOption == 2:
                 #vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    #TODO: creaza folder
                     #atunci doar il pasez functiei
                     self.flipAndRotateDataset(self.datasetPath+clahePath,self.datasetPath+flipPath+clahePath)
                 else:
-                    #TODO: creaza folder
                     #atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath+cleanPath,self.datasetPath+clahePath)
                     self.flipAndRotateDataset(self.datasetPath+clahePath,self.datasetPath+flipPath+clahePath)
@@ -210,11 +207,11 @@ class Augmentator:
                 self.flipAndRotateDataset(self.datasetPath+cleanPath,self.datasetPath+flipPath+basePath)
                 # vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                     self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
@@ -245,11 +242,11 @@ class Augmentator:
                     grayGenerated = True
                 # vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                    self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
@@ -267,11 +264,11 @@ class Augmentator:
                     # sa nu-l mai genereze si alta augmentare
                     grayGenerated = True
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                     self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.flipAndRotateDataset(self.datasetPath + clahePath, self.datasetPath + flipPath + clahePath)
@@ -281,16 +278,14 @@ class Augmentator:
 
         if self.erase > 0:
             if self.eraseOption == 1:
-                #TODO:creaza folder
+                
                 self.eraseWholePath(self.datasetPath+cleanPath,self.datasetPath+erasePath+basePath)
             if self.eraseOption == 2:
                 #vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    #TODO: creaza folder
                     #atunci doar il pasez functiei
                     self.eraseWholePath(self.datasetPath+clahePath,self.datasetPath+erasePath+clahePath)
                 else:
-                    #TODO: creaza folder
                     #atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath+cleanPath,self.datasetPath+clahePath)
                     self.eraseWholePath(self.datasetPath+clahePath,self.datasetPath+erasePath+clahePath)
@@ -311,11 +306,11 @@ class Augmentator:
                 self.eraseWholePath(self.datasetPath+cleanPath,self.datasetPath+erasePath+basePath)
                 # vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                     self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
@@ -346,11 +341,11 @@ class Augmentator:
                     grayGenerated = True
                 # vrea pe clahe, exista deja creat un folder cu clahe?
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                    self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
@@ -369,11 +364,11 @@ class Augmentator:
                     # sa nu-l mai genereze si alta augmentare
                     grayGenerated = True
                 if claheGenerated == True:
-                    # TODO: creaza folder
+                    
                     # atunci doar il pasez functiei
                     self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
                 else:
-                    # TODO: creaza folder
+                    
                     # atunci il generez si abea dupa aplic pe el flip
                     self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
                     self.eraseWholePath(self.datasetPath + clahePath, self.datasetPath + erasePath + clahePath)
@@ -462,9 +457,11 @@ class Augmentator:
         shutil.rmtree(pathToRemove,ignore_errors=True)
 
         nameOfArchive = self.archiveName.split('.')[0]
-        zipf = zipfile.ZipFile(self.saveArchivePath+"\\"+self.archiveName, 'w', zipfile.ZIP_DEFLATED)
-        self.zipdir(currentPath,zipf)
-        #self.removeArchiveFromItself(currentPath+self.archiveName,currentPath+nameOfArchive+"2.zip")
+
+        #daca exista deja arhiva o sterg,ca sa o inlocuiesc
+        if os.path.exists(self.saveArchivePath+"\\"+self.archiveName):
+            os.remove(self.saveArchivePath+"\\"+self.archiveName)
+        shutil.make_archive(self.saveArchivePath+"\\"+nameOfArchive, 'zip', currentPath)
 
         #acum sterg directoarele pentru ca sunt deja in arhiva
         directory_contents = os.listdir(self.datasetPath)
@@ -472,21 +469,3 @@ class Augmentator:
             # daca e director il adaug in arhiva
             if os.path.isdir(currentPath+item):
                 shutil.rmtree(currentPath+item,ignore_errors=True)
-
-    def removeArchiveFromItself(self, path1,path2):
-        zin = zipfile.ZipFile(path1, 'r')
-        zout = zipfile.ZipFile(path2, 'w')
-        for item in zin.infolist():
-            buffer = zin.read(item.filename)
-            if item.filename.split('.')[1] != ".zip":
-                zout.writestr(item, buffer)
-        zout.close()
-        zin.close()
-
-    def zipdir(self,path, ziph):
-        # ziph este zipfile in care adaug
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                ziph.write(os.path.join(root, file),
-                           os.path.relpath(os.path.join(root, file),
-                                           os.path.join(path, '..')))

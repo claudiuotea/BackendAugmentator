@@ -2,7 +2,7 @@ import uuid
 from zipfile import ZipFile
 
 import flask_jwt_extended
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory, redirect
 from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token,current_user
 from flask_sqlalchemy import SQLAlchemy
@@ -36,10 +36,11 @@ app.config['MAIL_USERNAME'] = 'claudiuoteaogc1@gmail.com'
 app.config['MAIL_PASSWORD'] = 'veverita1999'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=50)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
 #path-ul unde userii salveaza datele
 app.config["USERS_FOLDER"] = "users"
+app.config["DOWNLOAD_FOLDER"] ="users/AUGMENTED"
 # aici salvam database-ul
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
 
@@ -78,7 +79,20 @@ def consume_request_body():
     for more details """
     request.data
 
-#@app.route("get")
+
+#O sa fie cu /userpath pentru ca aici va fi public id-ul (care e unic,deci link-ul va fi unic)
+@app.route("/download/<publicId>/<fileName>", methods=["GET"])
+@jwt_required()
+def download(publicId,fileName):
+    #creez path-ul pentru download
+    folderPath = os.getcwd()+"/"+app.config["DOWNLOAD_FOLDER"] + "/" + publicId
+    #verific daca user-ul curent e cel care are public id de unde vrea sa descarce, altfel e unauthorized
+    if current_user.public_id != publicId:
+        return make_response("You are not authorized to access this link", 403)
+
+    response = send_from_directory(folderPath,fileName,as_attachment=True)
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
 
 @app.route("/uploadfile",methods=["POST"])
 @jwt_required()
@@ -95,7 +109,6 @@ def uploadFileFromClient():
         zipfile_ob = ZipFile(file_like_object)
         zipfile_ob.extractall(cleanPath)
 
-        resp = make_response('Success!', 200)
         #creez parametrii pentru augmentare
         augmData = request.form
 
@@ -110,7 +123,14 @@ def uploadFileFromClient():
                                   ,datasetPath=savePath, archiveName=file.filename,saveArchivePath=saveArchivePath)
 
         augmentator.applyAugmentations()
+
+        #dupa augmentare il redirectionez la download automat [un link care contine
+        #in url parameters datele pe care el le va trimite la server automat pentru download
+        linkToDownload = utils.Utils.store_download_link(current_user.public_id, file.filename)
+        resp = make_response(linkToDownload,200)
         return resp
+        # resp = make_response(linkToDownload,200)
+        # return resp
 
 
 
@@ -155,7 +175,7 @@ def login():
 
     # daca nu exista sau nu sunt complete, returnam 401
     if not auth or not auth.username or not auth.password:
-        return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+        return make_response('Wrong email or password', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
     # preluam user-ul din database dupa username
     user = User.query.filter_by(username=auth.username).first()
