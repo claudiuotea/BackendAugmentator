@@ -1,3 +1,4 @@
+import time
 import uuid
 from zipfile import ZipFile
 
@@ -15,13 +16,11 @@ import utils
 from os import path
 import os
 from shutil import unpack_archive
-
 from Augmentator import Augmentator
 
 app = Flask(__name__)
 # cors = CORS(app)
 CORS(app)
-
 # O sa utilizam secret key-ul pentru JWT
 app.config["JWT_SECRET_KEY"] = 'JDMpower'
 # jwt
@@ -36,13 +35,15 @@ app.config['MAIL_USERNAME'] = 'claudiuoteaogc1@gmail.com'
 app.config['MAIL_PASSWORD'] = 'veverita1999'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=50)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
 #path-ul unde userii salveaza datele
 app.config["USERS_FOLDER"] = "users"
 app.config["DOWNLOAD_FOLDER"] ="users/AUGMENTED"
 # aici salvam database-ul
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
 
 db = SQLAlchemy(app)
 # instanta pentru clasa care trimite mailuri
@@ -72,6 +73,25 @@ class VerifyTokens(db.Model):
     public_id = db.Column(db.String(50))
     token = db.Column(db.String(50))
 
+#aici vor fi salvate date pentru fiecare augmentare facuta de catre un user
+#de aici se vor crea statistici mai tarziu
+class Augmentation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(50))
+    isClahe = db.Column(db.String(50))
+    isGray = db.Column(db.String(50))
+    isFlip = db.Column(db.String(50))
+    isFlipBase = db.Column(db.String(50))
+    isFlipClahe = db.Column(db.String(50))
+    isFlipGray = db.Column(db.String(50))
+    isErase = db.Column(db.String(50))
+    isEraseBase = db.Column(db.String(50))
+    isEraseGray = db.Column(db.String(50))
+    isEraseClahe = db.Column(db.String(50))
+    link = db.Column(db.String(50))
+    filename = db.Column(db.String(50))
+
+
 @app.before_request
 def consume_request_body():
     """ Consumes the request body before handling a request to fix uwsgi+nginx problems
@@ -79,6 +99,64 @@ def consume_request_body():
     for more details """
     request.data
 
+
+
+#returneaza toate augmentarile facute de user-ul curent
+@app.route("/augmentations", methods=["GET"])
+@jwt_required()
+def getUserAugmentations():
+    #daca e admin va primi datele de la toti userii
+    if current_user.admin == True:
+        augmentations = Augmentation.query.all()
+    #daca nu e admin va primi doar datele lui
+    else:
+        augmentations = Augmentation.query.filter_by(user_id=current_user.public_id).all()
+
+    #acum numar cate din augmentari au fost folosite
+    output = {}
+    links = []
+    filenames = []
+
+    clahe, gray, flip, erase, flipBase, flipClahe, flipGray, eraseBase, eraseClahe, eraseGray = 0,0,0,0,0,0,0,0,0,0
+    for aug in augmentations:
+        if aug.isClahe == "true":
+            clahe += 1
+        if aug.isGray == "true":
+            gray += 1
+        if aug.isFlipBase == "true":
+            flip += 1
+            flipBase += 1
+        if aug.isFlipGray == "true":
+            flip += 1
+            flipGray += 1
+        if aug.isFlipClahe == "true":
+            flip += 1
+            flipClahe += 1
+        if aug.isEraseBase == "true":
+            erase += 1
+            eraseBase += 1
+        if aug.isEraseGray == "true":
+            erase += 1
+            eraseGray += 1
+        if aug.isEraseClahe == "true":
+            erase += 1
+            eraseClahe += 1
+        links.append(aug.link)
+        filenames.append(aug.filename)
+
+    output["clahe"] = clahe
+    output["gray"] = gray
+    output["flip"] = flip
+    output["erase"] = erase
+    output["flipBase"] = flipBase
+    output["flipClahe"] = flipClahe
+    output["flipGray"] = flipGray
+    output["eraseGray"] = eraseGray
+    output["eraseBase"] = eraseBase
+    output["eraseClahe"] = eraseClahe
+    output["links"] = links
+    output["filenames"] = filenames
+    return jsonify({'augmentations': output})
 
 #O sa fie cu /userpath pentru ca aici va fi public id-ul (care e unic,deci link-ul va fi unic)
 @app.route("/download/<publicId>/<fileName>", methods=["GET"])
@@ -90,9 +168,10 @@ def download(publicId,fileName):
     if current_user.public_id != publicId:
         return make_response("You are not authorized to access this link", 403)
 
-    response = send_from_directory(folderPath,fileName,as_attachment=True)
+    response = send_from_directory(folderPath,fileName,as_attachment=True, cache_timeout = 0)
     response.headers.add("Access-Control-Allow-Origin", "*")
     return response
+
 
 @app.route("/uploadfile",methods=["POST"])
 @jwt_required()
@@ -104,6 +183,11 @@ def uploadFileFromClient():
         cleanPath = savePath + "\\" + "CLEAN"
         #path-ul unde salveaza arhiva augmentata
         saveArchivePath = os.getcwd() + "\\" +app.config["USERS_FOLDER"] + "\\AUGMENTED\\" + current_user.public_id
+
+        #daca exista deja un fisier cu numele asta cer sa-l schimbe
+        if os.path.exists(saveArchivePath + "\\" +file.filename):
+            return jsonify("Please select a different name for your archive, not one you already used"),403
+
         #deschide fisierul cu ZipFile ca sa-l dezarhivezi direct din request
         file_like_object = file.stream._file
         zipfile_ob = ZipFile(file_like_object)
@@ -127,6 +211,17 @@ def uploadFileFromClient():
         #dupa augmentare il redirectionez la download automat [un link care contine
         #in url parameters datele pe care el le va trimite la server automat pentru download
         linkToDownload = utils.Utils.store_download_link(current_user.public_id, file.filename)
+
+        # salvam in database parametrii augmentarii
+        augm = Augmentation(user_id=current_user.public_id, isClahe=augmData["isClahe"], isGray=augmData["isGray"],
+                            isFlip=augmData["isFlip"],
+                            isErase=augmData["isErase"], isFlipBase=augmData["isFlipBase"],
+                            isFlipGray=augmData["isFlipGray"], isFlipClahe=augmData["isFlipClahe"],
+                            isEraseBase=augmData["isEraseBase"], isEraseClahe=augmData["isEraseClahe"],
+                            isEraseGray=augmData["isEraseGray"], link=linkToDownload, filename=file.filename)
+        db.session.add(augm)
+        db.session.commit()
+
         resp = make_response(linkToDownload,200)
         return resp
         # resp = make_response(linkToDownload,200)
@@ -167,6 +262,7 @@ def sendEmail():
     msg.body = "Send from: "+data['mail']+"\n" + data['message'] + "\nPhone number: " + data['phoneNumber']
     mail.send(msg)
     return make_response('Success!', 200)
+
 @app.route('/login')
 @cross_origin()
 def login():
@@ -188,14 +284,14 @@ def login():
     if check_password_hash(user.password, auth.password):
         # daca contul nu este verificat, oprim login-ul
         if user.verified == False:
-            return jsonify({'message': 'Please verify account!'}), 403
+            return make_response('Please verify your account!', 403)
 
         access_token = create_access_token(user.public_id)
         refresh_token = create_refresh_token(user.public_id)
         return jsonify({'AccessToken': access_token,'RefreshToken':refresh_token})
 
     # parola nu e corecta, returnam 401
-    return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+    return make_response('Wrong credentials!', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
 
 
 @app.route("/user", methods=['GET'])
@@ -382,7 +478,7 @@ def forgotPass():
     user = User.query.filter_by(email=data['email']).first()
 
     if not user:
-        return jsonify({'message': 'Permission denied!'}), 404
+        return jsonify({'message': 'User not found!'}), 403
 
     # generez link-ul pentru resetare parola
     url, token, exp_date = utils.Utils.store_reset_token(user.public_id)

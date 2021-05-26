@@ -39,7 +39,9 @@ class Utils:
     @staticmethod
     def store_download_link(public_id,filename):
         # creaza link si returneaza
+        url = "http://localhost:5000"
         url = Utils.BASE_URL + "/app/download?publicId="+public_id+"&fileName=" +filename
+        #url = url + "/download/" + public_id+ "/" +filename
         return url
 
     @staticmethod
