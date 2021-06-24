@@ -1,13 +1,9 @@
-import time
 import uuid
 from zipfile import ZipFile
-
-import flask_jwt_extended
 from flask import Flask, jsonify, request, make_response, send_from_directory, redirect
 from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, create_refresh_token,current_user
 from flask_sqlalchemy import SQLAlchemy
-from pyunpack import Archive
 from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
@@ -15,7 +11,6 @@ from flask_mail import Mail, Message
 import utils
 from os import path
 import os
-from shutil import unpack_archive
 from Augmentator import Augmentator
 
 app = Flask(__name__)
@@ -35,13 +30,15 @@ app.config['MAIL_USERNAME'] = 'claudiuoteaogc1@gmail.com'
 app.config['MAIL_PASSWORD'] = 'veverita1999'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(seconds=15)
+
+#configurari JWT
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = datetime.timedelta(hours=6)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = datetime.timedelta(days=30)
 #path-ul unde userii salveaza datele
 app.config["USERS_FOLDER"] = "users"
 app.config["DOWNLOAD_FOLDER"] ="users/AUGMENTED"
 # aici salvam database-ul
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:/Anul 3/RESTapi/augmdbfinal.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///E:\Anul 3\LICENTA\RESTapi/augmdbfinal.db'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 
@@ -98,7 +95,6 @@ def consume_request_body():
     See https://github.com/vimalloc/flask-jwt-extended/issues/253#issuecomment-505222118
     for more details """
     request.data
-
 
 
 #returneaza toate augmentarile facute de user-ul curent
@@ -224,9 +220,6 @@ def uploadFileFromClient():
 
         resp = make_response(linkToDownload,200)
         return resp
-        # resp = make_response(linkToDownload,200)
-        # return resp
-
 
 
 # We are using the `refresh=True` options in jwt_required to only allow
@@ -490,7 +483,7 @@ def forgotPass():
 
     # ii trimit mail cu link-ul
     msg = Message('Reset your password', sender=app.config['MAIL_USERNAME'], recipients=[user.email])
-    msg.body = "Please access this link to reset your password within the next 6 hours: " + url
+    msg.body = "Please access this link to reset your password as soon as possible: " + url
     mail.send(msg)
     return jsonify({'message': 'Email sent!'}), 200
 

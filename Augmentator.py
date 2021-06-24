@@ -3,7 +3,6 @@ import random as rand
 import shutil
 import zipfile
 from pathlib import Path
-
 import cv2
 import imutils
 import numpy as np
@@ -185,15 +184,12 @@ class Augmentator:
         # daca vrea clahe
         if self.clahe > 0:
             claheGenerated = True
-            # TODO:test purpose -- AICI VOI CREA FOLDER
-            print(self.datasetPath + clahePath)
             self.claheWholePath(self.datasetPath + cleanPath, self.datasetPath + clahePath)
         # daca vrea grayscale
         if self.grayscale > 0:
             grayGenerated = True
             self.grayscaleWholePath(self.datasetPath + cleanPath, self.datasetPath + grayPath)
 
-        # TODO: REFACTOR THE WHOLE FUNCTION @@@@@@@@@@@@@@
         # daca vrea flip, verific cu ce optiune vrea
         # Coduri optiuni: 1 - pe dataset baza | 2 - pe dataset clahe | 3 - pe dataset grayscale
         # 4- pe dataset baza+clahe | 5- pe baza + grayscale | 6 - pe clahe + grayscale | 7 - pe toate 3
@@ -399,8 +395,6 @@ class Augmentator:
     def claheWholePath(self, path, savePath):
         howManyClahe = 0
         for filename in os.listdir(path):
-            # probabilitatea cu care se intampla CLAHE pe dataset
-            #if rand.random() < self.clahe:
             # read the image
             img = cv2.imread(os.path.join(path, filename))
             # daca este imagine si exista
